@@ -323,7 +323,7 @@ else
     # support the suite, so demanding a requirement reference on them produces
     # noise that trains people to ignore this gate.
     case "$(basename "$f")" in
-      setup.*|*-setup.*|global-setup.*|fixtures.*|*-fixtures.*|helpers.*|*-helpers.*|conftest.*|*.config.*) continue ;;
+      setup.*|*-setup.*|fixtures.*|*-fixtures.*|helpers.*|*-helpers.*|conftest.*|*.config.*) continue ;;
     esac
     test_files_checked=$((test_files_checked + 1))
     grep -qE 'Spec:\s*[A-Za-z]{2,3}-?[0-9]' "$f" || untraced+=("${f#"$REPO_ROOT"/}")
