@@ -14,7 +14,8 @@ Both are Bash, grep and sed only. No YAML parser, no Python, no network at runti
 Add this catalog once per project, then install by name:
 
 ```bash
-specify extension catalog add https://raw.githubusercontent.com/son1122/spec-kit-guard/main/catalog.json
+specify extension catalog add https://raw.githubusercontent.com/son1122/spec-kit-guard/main/catalog.json \
+  --name spec-kit-guard --install-allowed
 specify extension add guard
 specify extension add converge-loop
 ```
