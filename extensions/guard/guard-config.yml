@@ -1,0 +1,19 @@
+# Spec Guard configuration
+# Copied to .specify/extensions/guard/guard-config.yml on install.
+#
+# Flat scalars only — the check script reads these with grep so that it has no
+# YAML dependency and runs anywhere bash does.
+
+# Fail when a requirement in spec.md is referenced by no task in tasks.md.
+# This is the check that catches a requirement written into the spec and then
+# silently dropped during task generation.
+fail_on_uncovered_requirements: true
+
+# Fail when plan.md's Constitution Check does not reference the ratified
+# constitution version — including the case where it still says NOT EVALUABLE
+# because it was written while the constitution was a placeholder.
+fail_on_stale_constitution: true
+
+# Fail when something is registered as supported with no handler implementing
+# it. Rules live in parity-rules.tsv.
+fail_on_parity_violation: true

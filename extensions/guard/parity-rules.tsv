@@ -1,0 +1,44 @@
+# Registry / handler parity rules — TAB separated, up to five columns:
+#
+#   name <TAB> source <TAB> extract-pattern (ERE) <TAB> target <TAB> transform (optional sed)
+#
+# Every token the pattern extracts from `source` must appear literally in
+# `target`. The rule exists to make one failure impossible: something declared
+# as supported before the code that implements it exists, so it parses fine,
+# gets walked past at runtime, and is reported as having succeeded.
+#
+# `source` may carry a sed address range after the path to scope extraction to
+# one block, e.g.  path/file.ts:/const SUPPORTED_TYPES/,/\]\);/
+# Without a range the pattern matches the whole file, which usually produces
+# false positives — a parser normally mentions type names outside its supported
+# set, and none of those are meant to have handlers.
+#
+# `transform` is an optional sed expression applied to each extracted token,
+# for when the registry and the implementation spell the same thing
+# differently (e.g. "ext:HttpCall" in one file, "HttpCall" in the other).
+#
+# Paths are relative to the repository root. Rules whose source or target file
+# does not exist are SKIPPED, so leaving examples in place is harmless.
+#
+# ── No rules are active by default ────────────────────────────────────────
+# The other two gates (requirement coverage, constitution freshness) work in
+# any Spec Kit project with no configuration. This third gate is inherently
+# project-specific: only you know which registries must stay in step with an
+# implementation. Uncomment and adapt.
+#
+# Put your project's rules in .specify/guard-parity-rules.tsv instead of editing
+# this file — that path is outside the extension directory, so updating the
+# extension cannot overwrite it.
+#
+# Example, from a workflow engine where a type registered in the parser but
+# missing from the executor means a run silently skips a step and reports
+# success:
+#
+# element types have executor handlers	src/engine/parser.ts:/const SUPPORTED_TYPES/,/\]\);/	[a-z]+:[A-Za-z]+	src/engine/executor.ts
+# extension elements are declared in the schema	src/engine/parser.ts	ext:[A-Z][A-Za-z]+	src/engine/schema.ts	s/^ext://
+#
+# Other shapes this fits:
+#   - every route registered in a router has a handler module
+#   - every event name emitted has a subscriber
+#   - every feature flag referenced in code exists in the flag config
+#   - every capability or tool listed in a registry has an implementation

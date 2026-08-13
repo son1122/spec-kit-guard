@@ -1,0 +1,44 @@
+schema_version: "1.0"
+
+extension:
+  id: converge-loop
+  name: "Converge Loop"
+  version: "1.0.0"
+  description: "Run /speckit.converge after every /speckit.implement, and keep alternating implement → converge until the feature converges, with a bounded iteration count and no-progress detection"
+  category: "process"
+  effect: "read-write"
+  author: son1122
+  license: MIT
+
+requires:
+  speckit_version: ">=0.9.0"
+
+provides:
+  commands:
+    - name: speckit.converge-loop.run
+      file: commands/speckit.converge-loop.run.md
+      description: "Alternate implement and converge until converged, bounded and with a stop condition"
+    - name: speckit.converge-loop.verify
+      file: commands/speckit.converge-loop.verify.md
+      description: "Verify the tree builds and tests pass after implementation, then hand off to convergence"
+
+hooks:
+  after_implement:
+    command: speckit.converge-loop.verify
+    optional: false
+    description: "Verify the tree builds and tests pass, then hand off to convergence"
+  after_converge:
+    command: speckit.implement
+    optional: true
+    prompt: "Converge appended new tasks — run implement to complete them?"
+    description: "Continue the loop when convergence found remaining work"
+
+tags:
+  - "workflow"
+  - "convergence"
+  - "loop"
+  - "automation"
+
+config:
+  defaults:
+    max_iterations: 5

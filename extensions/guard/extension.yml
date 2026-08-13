@@ -1,0 +1,48 @@
+schema_version: "1.0"
+
+extension:
+  id: guard
+  name: "Spec Guard"
+  version: "1.0.0"
+  description: "Deterministic pre-implementation gates: every requirement is claimed by a task, the plan's Constitution Check matches the ratified constitution, and no capability is registered as supported before its handler exists"
+  category: "quality"
+  effect: "read-only"
+  author: son1122
+  license: MIT
+
+requires:
+  speckit_version: ">=0.9.0"
+
+provides:
+  commands:
+    - name: speckit.guard.check
+      file: commands/speckit.guard.check.md
+      description: "Run the requirement-coverage, constitution-freshness, and registry-parity gates"
+
+hooks:
+  after_tasks:
+    command: speckit.guard.check
+    optional: false
+    description: "Verify every requirement is claimed by at least one task"
+  after_plan:
+    command: speckit.guard.check
+    optional: true
+    prompt: "Check the plan against the ratified constitution?"
+    description: "Verify the plan's Constitution Check is current"
+  before_implement:
+    command: speckit.guard.check
+    optional: false
+    description: "Blocking gate: no implementation begins with an unclaimed requirement or a stale Constitution Check"
+
+tags:
+  - "quality"
+  - "traceability"
+  - "coverage"
+  - "constitution"
+  - "gate"
+
+config:
+  defaults:
+    fail_on_uncovered_requirements: true
+    fail_on_stale_constitution: true
+    fail_on_parity_violation: true

@@ -1,0 +1,7 @@
+# Converge Loop configuration
+# Copied to .specify/extensions/converge-loop/ on install.
+
+# Hard ceiling on implement -> converge iterations. The loop also stops early on
+# no-progress, a non-shrinking task count, an implement pass that changed nothing,
+# or a CRITICAL constitution violation that survives two iterations.
+max_iterations: 5

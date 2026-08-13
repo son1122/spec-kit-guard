@@ -1,0 +1,15 @@
+# Commands run after every /speckit.implement, before convergence.
+# One per line. Blank lines and # comments ignored.
+# Append @slow to a command to have `verify.sh --fast` skip it.
+#
+# Copy this to .specify/verify-commands.txt in your project — that path sits
+# outside the extension directory, so updating the extension cannot overwrite
+# your project's list.
+#
+# With no active lines here, verify.sh autodetects a Node project's typecheck
+# and test script, so a fresh project still gates on something real.
+#
+# Example:
+# npx tsc --noEmit
+# npm test
+# npm run test:integration @slow
