@@ -5,8 +5,7 @@ Verify the tree after every implement pass, then converge — and optionally kee
 ## Install
 
 ```bash
-specify extension catalog add https://raw.githubusercontent.com/son1122/spec-kit-guard/main/catalog.json \
-  --name spec-kit-guard --install-allowed
+specify extension catalog add https://raw.githubusercontent.com/son1122/speckit-extensions/main/catalog.json
 specify extension add converge-loop
 ```
 

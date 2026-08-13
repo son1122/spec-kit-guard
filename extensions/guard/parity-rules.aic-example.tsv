@@ -1,0 +1,27 @@
+# Registry / handler parity rules — TAB separated, up to five columns:
+#
+#   name <TAB> source <TAB> extract-pattern (ERE) <TAB> target <TAB> transform (optional sed)
+#
+# Every token the pattern extracts from `source` must appear literally in
+# `target`. The rule exists to make one failure impossible: something declared
+# as supported before the code that implements it exists, so it parses fine,
+# gets walked past at runtime, and is reported as having succeeded.
+#
+# `source` may carry a sed address range after the path to scope extraction to
+# one block, e.g.  path/file.ts:/const SUPPORTED_TYPES/,/\]\);/
+# Without a range the pattern matches the whole file, which usually produces
+# false positives.
+#
+# `transform` is an optional sed expression applied to each extracted token,
+# for when the registry and the implementation spell the same thing
+# differently.
+#
+# Paths are relative to the repository root. Rules whose source or target file
+# does not exist are skipped, so unused example rows are harmless.
+#
+# ── This project's rules ──────────────────────────────────────────────────
+# Constitution § Development Workflow: "A capability, element type, or action
+# MUST NOT be registered as supported before its handler exists."
+
+BPMN types registered in the parser have executor handlers	src/lib/bpmn-engine/parser.ts:/const SUPPORTED_TYPES/,/\]\);/	bpmn:[A-Za-z]+	src/lib/bpmn-engine/executor.ts
+aic extension elements are declared in the moddle descriptor	src/lib/bpmn-engine/parser.ts	aic:[A-Z][A-Za-z]+	src/lib/bpmn-engine/aic-moddle.ts	s/^aic://

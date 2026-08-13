@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Lint every shell script
+        run: |
+          # -x follows sourced files; SC2016 is noisy here because the parity
+          # rules and secret patterns legitimately contain single-quoted regexes.
+          find . -name '*.sh' -not -path './.git/*' -print0 \
+            | xargs -0 shellcheck --severity=warning --exclude=SC2016
+
+  smoke:
+    name: smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run gates against the fixture project
+        run: bash tests/smoke.sh
+
+  catalog-in-sync:
+    name: catalog matches manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify catalog.json is not stale
+        # catalog.json is what `specify extension update` reads. Bumping
+        # extension.yml without regenerating it ships an update nobody is ever
+        # offered — a registry drifted from its implementation, which is the
+        # exact failure this repo's own parity gate exists to catch.
+        run: bash scripts/build-catalog.sh --check
+
+  self-check:
+    name: guard checks its own repo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan this repository for committed credentials
+        # This repo holds no spec.md of its own, so only the secret scan is
+        # meaningful here — but it is the check that matters most for a public
+        # repository, and it caught a near-miss during development.
+        run: |
+          mkdir -p .specify/memory specs
+          bash extensions/guard/scripts/bash/guard-check.sh --repo . 2>&1 | tee out.txt || true
+          if grep -q "possible credential" out.txt; then
+            echo "::error::credential pattern found in repository artifacts"
+            exit 1
+          fi

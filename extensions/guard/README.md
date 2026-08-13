@@ -1,6 +1,6 @@
 # Spec Guard
 
-Deterministic pre-implementation gates for Spec Kit projects.
+Deterministic pre-implementation gates for Spec Kit projects. Six checks, all mechanical.
 
 `/speckit.analyze` reasons across your artifacts and finds problems no pattern match could. It is also the pass that will occasionally miss an item, or report a gap that does not exist because it did not read your existing schema. Spec Guard is the opposite trade: three narrow, mechanical checks that are exhaustive and safe to block on.
 
@@ -34,7 +34,19 @@ Catches a Constitution Check written while the constitution was still the placeh
 
 Reports the constitution as unratified (a warning, not a failure) when it is still the template.
 
-**3. Registry / handler parity.** Off by default; see `parity-rules.tsv`.
+**3. User story coverage.** Every `### User Story N` in `spec.md` has at least one task tagged `[USN]`.
+
+Catches a whole slice of intent nobody scheduled. Requirement coverage misses it, because a story carries the acceptance scenarios that define "done" rather than a numbered requirement.
+
+**4. Test traceability.** Every test file carries a `Spec: FR-###` reference; harnesses are exempt.
+
+Advisory by default. A suite that cannot be traced to requirements can only answer "do the tests pass?", never "is this requirement tested?" — a weaker and different question.
+
+**5. Secrets in spec artifacts.** Scans `specs/` and `.specify/memory/` for credential shapes.
+
+Code gets scanned for secrets routinely; the documents beside it almost never do, even though specs and research notes accumulate real hostnames, sample tokens and API URLs, and then get committed and shared. Blocking by default; false positives go in `.specify/guard-secret-allowlist.txt`.
+
+**6. Registry / handler parity.** Off by default; see `parity-rules.tsv`.
 
 Catches something registered as supported before its implementation exists. This is the worst failure available in a dispatcher: the entry parses, execution walks past it, and the operator is told it succeeded.
 

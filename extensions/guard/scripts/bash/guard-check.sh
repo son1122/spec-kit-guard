@@ -88,6 +88,15 @@ cfg() {
 FAIL_COVERAGE="$(cfg fail_on_uncovered_requirements true)"
 FAIL_CONSTITUTION="$(cfg fail_on_stale_constitution true)"
 FAIL_PARITY="$(cfg fail_on_parity_violation true)"
+FAIL_STORIES="$(cfg fail_on_uncovered_user_stories true)"
+# Defaults to advisory: a project adopting this mid-flight would otherwise be
+# blocked by every pre-existing test file at once. Turn it on once the backlog
+# is cleared.
+FAIL_UNTRACED="$(cfg fail_on_untraced_tests false)"
+# Defaults to blocking. A committed credential is worse than a noisy gate, and
+# the patterns below match real token shapes rather than the word "secret".
+FAIL_SECRETS="$(cfg fail_on_secrets_in_specs true)"
+TEST_DIRS="$(cfg test_dirs "tests e2e")"
 
 # --- locate the active feature ----------------------------------------------
 FEATURE_DIR="${SPECIFY_FEATURE_DIRECTORY:-}"
@@ -108,10 +117,14 @@ PLAN="$FEATURE_DIR/plan.md"
 CONSTITUTION="$REPO_ROOT/.specify/memory/constitution.md"
 
 failures=0
-declare -a uncovered=() parity_violations=()
+declare -a uncovered=() parity_violations=() uncovered_stories=() untraced=() secret_hits=()
 constitution_status="skipped"
 req_total=0
 req_covered=0
+story_total=0
+scenario_total=0
+test_files_total=0
+test_files_checked=0
 
 section() { $JSON || printf '\n%s\n' "$1"; }
 
@@ -146,7 +159,6 @@ if [[ -f "$SPEC" && -f "$TASKS" ]]; then
     # the spec does not use the `- **FR-001**: ...` form this gate matches, not
     # that every requirement is covered. A gate that passes because it looked at
     # nothing is worse than no gate, because it still reports green.
-    constitution_status="$constitution_status"
     $JSON || {
       printf '  WARN  no requirements found in spec.md matching "- **FR-###**:"\n'
       printf '        This gate cannot verify coverage. Either the spec uses a\n'
@@ -257,6 +269,123 @@ if [[ -f "$PARITY_RULES" ]]; then
   ((rule_count == 0)) && { $JSON || printf '  SKIP  no parity rules defined\n'; }
 fi
 
+# --- Check D: every user story is claimed by at least one task ---------------
+# Requirement coverage alone misses this. A spec's user stories carry the
+# acceptance scenarios that define "done", and a story with no task is a whole
+# slice of intent nobody scheduled.
+if [[ -f "$SPEC" && -f "$TASKS" ]]; then
+  section "── User story coverage ──"
+  scenario_total="$(grep -cE '^\s*[0-9]+\.\s+\*\*Given\*\*' "$SPEC" 2>/dev/null || true)"
+  while IFS= read -r n; do
+    [[ -z "$n" ]] && continue
+    story_total=$((story_total + 1))
+    us="US${n}"
+    grep -qE "(\[${us}\]|(^|[^A-Za-z0-9])${us}([^A-Za-z0-9]|$))" "$TASKS" \
+      || uncovered_stories+=("$us")
+  done < <(grep -oE '^### User Story [0-9]+' "$SPEC" 2>/dev/null | grep -oE '[0-9]+$' | sort -un)
+
+  if ((story_total == 0)); then
+    $JSON || printf '  WARN  no "### User Story N" headings found in spec.md\n'
+  elif ((${#uncovered_stories[@]} > 0)); then
+    $JSON || {
+      printf '  FAIL  %d of %d user stories have no task:\n' "${#uncovered_stories[@]}" "$story_total"
+      printf '        %s\n' "${uncovered_stories[@]}"
+    }
+    [[ "$FAIL_STORIES" == "true" ]] && failures=$((failures + 1))
+  else
+    $JSON || printf '  PASS  all %d user stories (%s acceptance scenarios) claimed by tasks\n' \
+      "$story_total" "$scenario_total"
+  fi
+fi
+
+# --- Check E: every test file says which requirement it validates ------------
+# A test suite that cannot be traced back to requirements cannot answer "is this
+# requirement tested?" — you can only answer "do the tests pass?", which is a
+# different and much weaker question.
+section "── Test traceability ──"
+declare -a test_files=()
+# shellcheck disable=SC2086  # TEST_DIRS is a space-separated list by design
+for d in $TEST_DIRS; do
+  [[ -d "$REPO_ROOT/$d" ]] || continue
+  while IFS= read -r f; do test_files+=("$f"); done < <(
+    find "$REPO_ROOT/$d" -type f \
+      \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \
+         -o -name '*.py' -o -name '*.go' -o -name '*.rb' -o -name '*.rs' \
+         -o -name '*.java' -o -name '*.sh' \) 2>/dev/null | sort
+  )
+done
+test_files_total=${#test_files[@]}
+if ((test_files_total == 0)); then
+  $JSON || printf '  SKIP  no test files found under: %s\n' "$TEST_DIRS"
+else
+  for f in "${test_files[@]}"; do
+    # Harnesses are not tests. setup, fixtures, helpers and conftest exist to
+    # support the suite, so demanding a requirement reference on them produces
+    # noise that trains people to ignore this gate.
+    case "$(basename "$f")" in
+      setup.*|*-setup.*|global-setup.*|fixtures.*|*-fixtures.*|helpers.*|*-helpers.*|conftest.*|*.config.*) continue ;;
+    esac
+    test_files_checked=$((test_files_checked + 1))
+    grep -qE 'Spec:\s*[A-Za-z]{2,3}-?[0-9]' "$f" || untraced+=("${f#"$REPO_ROOT"/}")
+  done
+  if ((${#untraced[@]} > 0)); then
+    lbl="WARN"; [[ "$FAIL_UNTRACED" == "true" ]] && lbl="FAIL"
+    $JSON || {
+      printf '  %s  %d of %d test files carry no "Spec:" reference:\n' \
+        "$lbl" "${#untraced[@]}" "$test_files_checked"
+      printf '        %s\n' "${untraced[@]:0:15}"
+      ((${#untraced[@]} > 15)) && printf '        … and %d more\n' "$((${#untraced[@]} - 15))"
+    }
+    [[ "$FAIL_UNTRACED" == "true" ]] && failures=$((failures + 1))
+  else
+    $JSON || printf '  PASS  all %d test files carry a Spec: reference\n' "$test_files_checked"
+  fi
+fi
+
+# --- Check F: no credentials in specification artifacts ----------------------
+# Specs, plans and research notes accumulate real hostnames, sample tokens and
+# API URLs, and then get committed and shared. Code gets scanned for secrets as
+# a matter of course; the documents beside it almost never do.
+section "── Secrets in spec artifacts ──"
+SECRET_SCAN_DIRS=()
+[[ -d "$REPO_ROOT/specs" ]] && SECRET_SCAN_DIRS+=("$REPO_ROOT/specs")
+[[ -d "$REPO_ROOT/.specify/memory" ]] && SECRET_SCAN_DIRS+=("$REPO_ROOT/.specify/memory")
+
+if ((${#SECRET_SCAN_DIRS[@]} == 0)); then
+  $JSON || printf '  SKIP  no specs/ or .specify/memory/ to scan\n'
+else
+  ALLOWLIST="$REPO_ROOT/.specify/guard-secret-allowlist.txt"
+  # Tight patterns: real token shapes and credentials-in-URL, not the mere
+  # appearance of the word "secret". A gate that cries wolf gets disabled.
+  SECRET_PATTERNS='-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9]{32,}|AIza[0-9A-Za-z_-]{30,}|(api[_-]?key|secret|token|password)["'"'"']?\s*[:=]\s*["'"'"'][^"'"'"'[:space:]]{16,}["'"'"']|[a-z][a-z0-9+.-]*://[^/[:space:]:@]+:[^/[:space:]:@]+@'
+  while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    # Drop obvious placeholders before reporting — these are what specs are
+    # legitimately full of.
+    echo "$hit" | grep -qiE 'example|placeholder|redacted|your[-_]|changeme|xxxx|<[^>]+>|\$\{|dummy|sample|fake|test[-_]?key' && continue
+    [[ -f "$ALLOWLIST" ]] && echo "$hit" | grep -qEf "$ALLOWLIST" && continue
+    secret_hits+=("${hit#"$REPO_ROOT"/}")
+  # -e is mandatory, not stylistic: this pattern starts with "-----BEGIN", so
+  # without it grep parses the whole alternation as command-line options, exits
+  # with a usage error, and the scan silently matches nothing forever.
+  done < <(grep -rEIn -e "$SECRET_PATTERNS" "${SECRET_SCAN_DIRS[@]}" 2>/dev/null || true)
+
+  if ((${#secret_hits[@]} > 0)); then
+    $JSON || {
+      printf '  FAIL  %d possible credential(s) in specification artifacts:\n' "${#secret_hits[@]}"
+      # Values are truncated: printing a live credential in full into CI logs
+      # would republish the very thing this gate exists to catch.
+      for h in "${secret_hits[@]:0:10}"; do printf '        %.120s\n' "$h"; done
+      ((${#secret_hits[@]} > 10)) && printf '        … and %d more\n' "$((${#secret_hits[@]} - 10))"
+      printf '        Rotate anything real, then add false positives as regexes to\n'
+      printf '        .specify/guard-secret-allowlist.txt\n'
+    }
+    [[ "$FAIL_SECRETS" == "true" ]] && failures=$((failures + 1))
+  else
+    $JSON || printf '  PASS  no credential patterns in %d scanned location(s)\n' "${#SECRET_SCAN_DIRS[@]}"
+  fi
+fi
+
 # --- report ------------------------------------------------------------------
 if $JSON; then
   printf '{"feature_dir":"%s","requirements_total":%d,"requirements_covered":%d,' \
@@ -266,8 +395,12 @@ if $JSON; then
     ((i > 0)) && printf ','
     printf '"%s"' "${uncovered[$i]}"
   done
-  printf '],"constitution":"%s","parity_violations":%d,"failures":%d}\n' \
-    "$constitution_status" "${#parity_violations[@]}" "$failures"
+  printf '],"constitution":"%s","parity_violations":%d,' \
+    "$constitution_status" "${#parity_violations[@]}"
+  printf '"user_stories_total":%d,"user_stories_uncovered":%d,"acceptance_scenarios":%s,' \
+    "$story_total" "${#uncovered_stories[@]}" "${scenario_total:-0}"
+  printf '"test_files":%d,"tests_untraced":%d,"secret_hits":%d,"failures":%d}\n' \
+    "$test_files_checked" "${#untraced[@]}" "${#secret_hits[@]}" "$failures"
 else
   printf '\n'
   if ((failures == 0)); then

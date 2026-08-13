@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: guard
   name: "Spec Guard"
-  version: "1.0.0"
+  version: "1.1.0"
   description: "Deterministic pre-implementation gates: every requirement is claimed by a task, the plan's Constitution Check matches the ratified constitution, and no capability is registered as supported before its handler exists"
   category: "quality"
   effect: "read-only"

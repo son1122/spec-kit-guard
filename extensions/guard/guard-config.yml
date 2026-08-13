@@ -1,19 +1,46 @@
 # Spec Guard configuration
 # Copied to .specify/extensions/guard/guard-config.yml on install.
 #
-# Flat scalars only — the check script reads these with grep so that it has no
-# YAML dependency and runs anywhere bash does.
+# Put a project's own copy at .specify/guard-config.yml instead — that path is
+# outside the extension directory, so updating the extension cannot overwrite it.
+#
+# Flat scalars only; the check script reads these with grep so it has no YAML
+# dependency and runs anywhere bash does.
 
-# Fail when a requirement in spec.md is referenced by no task in tasks.md.
-# This is the check that catches a requirement written into the spec and then
-# silently dropped during task generation.
+# A requirement in spec.md cited by no task in tasks.md.
+# Catches a requirement written into the spec and then dropped during task
+# generation — invisible otherwise, because tasks.md reads as complete without it.
 fail_on_uncovered_requirements: true
 
-# Fail when plan.md's Constitution Check does not reference the ratified
-# constitution version — including the case where it still says NOT EVALUABLE
-# because it was written while the constitution was a placeholder.
+# plan.md's Constitution Check does not reference the ratified constitution
+# version, including when it still says NOT EVALUABLE because it was written
+# while the constitution was a placeholder.
 fail_on_stale_constitution: true
 
-# Fail when something is registered as supported with no handler implementing
-# it. Rules live in parity-rules.tsv.
+# Something registered as supported with no handler implementing it.
+# Rules live in .specify/guard-parity-rules.tsv (no rules active by default).
 fail_on_parity_violation: true
+
+# A user story in spec.md with no task tagged to it. Requirement coverage misses
+# this: a story carries the acceptance scenarios that define "done", so a story
+# nobody scheduled is a whole slice of intent gone missing.
+fail_on_uncovered_user_stories: true
+
+# A test file carrying no "Spec: FR-###" reference.
+#
+# Advisory by default. A project adopting this mid-flight would otherwise be
+# blocked by every pre-existing test file at once, and the usual response to
+# that is to switch the gate off permanently. Clear the backlog, then set this
+# to true so it cannot regress.
+fail_on_untraced_tests: false
+
+# Credential-shaped strings in specs/ and .specify/memory/.
+#
+# Blocking by default: a committed credential is worse than a noisy gate. The
+# patterns match real token shapes rather than the word "secret", and obvious
+# placeholders are filtered. Add false positives as regexes, one per line, to
+# .specify/guard-secret-allowlist.txt
+fail_on_secrets_in_specs: true
+
+# Directories scanned for test traceability, space separated.
+test_dirs: tests e2e

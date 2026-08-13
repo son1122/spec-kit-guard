@@ -4,7 +4,7 @@ Two [Spec Kit](https://github.com/github/spec-kit) extensions that make spec-dri
 
 | Extension | What it does |
 |---|---|
-| **[guard](extensions/guard)** | Three deterministic gates — every requirement is cited by a task, the plan's Constitution Check matches the ratified constitution, and nothing is registered as supported before its handler exists |
+| **[guard](extensions/guard)** | Six deterministic gates over requirements, user stories, constitution freshness, test traceability, secrets in spec artifacts, and registry/handler parity |
 | **[converge-loop](extensions/converge-loop)** | Verifies the tree builds and tests pass after every implement pass, then converges — and can loop implement → verify → converge until the feature is done |
 
 Both are Bash, grep and sed only. No YAML parser, no Python, no network at runtime.
@@ -46,11 +46,14 @@ Each gate was written after a specific failure got through:
 
 ## Spec Guard
 
-Runs on `after_tasks` (blocking), `after_plan` (prompts), and `before_implement` (blocking).
+Six gates, run on `after_tasks` (blocking), `after_plan` (prompts), and `before_implement` (blocking).
 
-1. **Requirement coverage** — every `FR-###` in `spec.md` is cited by at least one task. Word-boundary aware, so `FR-012` is not treated as covered by a task citing only `FR-012a`. Detects a missing *citation*, which is not identical to missing work: a requirement may be implemented by a task that does not name it. Fix by citing it there, never by tagging an unrelated task.
+1. **Requirement coverage** — every `FR-###` in `spec.md` is cited by at least one task. Word-boundary aware, so `FR-012` is not treated as covered by a task citing only `FR-012a`. Detects a missing *citation*, which is not identical to missing work: a requirement may be implemented by a task that does not name it. Fix by citing it there, never by tagging an unrelated task. Finding zero requirements WARNs rather than passing — a gate that goes green because it looked at nothing is worse than no gate.
 2. **Constitution freshness** — `plan.md`'s Constitution Check references the version in `.specify/memory/constitution.md`. An unratified constitution is a warning, not a failure.
-3. **Registry / handler parity** — off until you define rules in `parity-rules.tsv`. Gates 1 and 2 need no configuration in any project; this one is inherently project-specific.
+3. **User story coverage** — every `### User Story N` in `spec.md` has at least one task tagged `[USN]`. Requirement coverage misses this, and a story carries the acceptance scenarios that define "done", so an unscheduled story is a whole slice of intent gone missing.
+4. **Test traceability** — every test file carries a `Spec: FR-###` reference. Harnesses (`setup.*`, `fixtures.*`, `conftest.*`) are exempt. Advisory by default, because a project adopting this mid-flight would otherwise be blocked by every existing test at once — and the usual response to that is to switch the gate off permanently. Clear the backlog, then set `fail_on_untraced_tests: true`.
+5. **Secrets in spec artifacts** — scans `specs/` and `.specify/memory/` for credential shapes. Code gets scanned for secrets as a matter of course; the documents beside it almost never do, even though specs and research notes accumulate real hostnames, sample tokens and API URLs and then get committed and shared. Blocking by default. False positives go in `.specify/guard-secret-allowlist.txt`.
+6. **Registry / handler parity** — off until you define rules. Gates 1–5 need no configuration; this one is inherently project-specific.
 
 ## Converge Loop
 
