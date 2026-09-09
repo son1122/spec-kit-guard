@@ -1,5 +1,5 @@
 # spec-kit-guard
-
+tesmp
 Two [Spec Kit](https://github.com/github/spec-kit) extensions that make spec-driven development harder to fool.
 
 | Extension | What it does |
